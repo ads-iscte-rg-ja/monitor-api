@@ -1,0 +1,16 @@
+# Configuração do buf: lint e deteção de alterações incompatíveis do contrato (ADR-0003).
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+    - COMMENTS
+  except:
+    # Os campos e as mensagens auto-explicativas não precisam de comentário próprio.
+    - COMMENT_FIELD
+    - COMMENT_MESSAGE
+    - COMMENT_ENUM_VALUE
+breaking:
+  use:
+    - FILE

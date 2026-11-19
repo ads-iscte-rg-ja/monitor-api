@@ -1,0 +1,131 @@
+// Contrato de ingestão entre o monitor-remote (cliente) e o monitor-central (servidor).
+// Decisão e justificação: monitor-platform/docs/adr/0003-contrato-ingestao-grpc.md.
+//
+// Regras que fazem parte do contrato, além dos tipos:
+//   * Autenticação: metadado "x-api-key" com a chave do host. O servidor identifica o host a partir
+//     da chave; nenhuma mensagem tem host_id escolhido pelo cliente.
+//   * Lotes de 1 a 100 registos (MaxBatchRecords) e mensagens até 1 MiB (MaxMessageBytes).
+//   * Entrega at-least-once: o servidor deduplica por (host, tipo, source_id). Reenviar um lote já
+//     aceite é seguro e devolve as mesmas confirmações.
+//   * Erros, por código gRPC:
+//       INVALID_ARGUMENT + RecordRejection   um registo inválido; o cliente põe-no em quarentena
+//       INVALID_ARGUMENT sem detalhe         lote mal formado; violação de contrato
+//       RESOURCE_EXHAUSTED sem RetryInfo     mensagem acima de MaxMessageBytes; dividir o lote
+//       RESOURCE_EXHAUSTED + RetryInfo       sobrecarga; tentar depois do atraso indicado
+//       UNAVAILABLE, INTERNAL, DEADLINE_EXCEEDED   falha transitória; tentar mais tarde
+//       UNAUTHENTICATED                      chave inválida ou revogada
+syntax = "proto3";
+
+package monitor.ingest.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ads-iscte-rg-ja/monitor-api/gen/go/monitor/ingest/v1;ingestv1";
+
+// IngestService recebe a telemetria dos agentes.
+service IngestService {
+  // IngestStats grava um lote de estatísticas de máquina, por inteiro ou nada.
+  rpc IngestStats(IngestStatsRequest) returns (IngestStatsResponse);
+  // IngestErrors grava um lote de erros de aplicações, por inteiro ou nada.
+  rpc IngestErrors(IngestErrorsRequest) returns (IngestErrorsResponse);
+}
+
+// MachineStat é uma amostra de recursos do host.
+message MachineStat {
+  // Identificador do registo no buffer do agente (> 0, único no lote). Chave de deduplicação.
+  int64 source_id = 1;
+  // Percentagem de CPU, de 0 a 100.
+  double cpu_percent = 2;
+  // Memória usada e total, em MB (0 <= usada <= total, total > 0).
+  double ram_used_mb = 3;
+  double ram_total_mb = 4;
+  // Disco usado e total, em GB (0 <= usado <= total, total > 0).
+  double disk_used_gb = 5;
+  double disk_total_gb = 6;
+  // Momento da recolha; nunca no futuro. Ausente = momento da receção.
+  google.protobuf.Timestamp collected_at = 7;
+}
+
+message IngestStatsRequest {
+  repeated MachineStat stats = 1;
+}
+
+// StatAcknowledgement confirma um registo gravado (ou já gravado antes).
+message StatAcknowledgement {
+  // Identificador no central.
+  int64 id = 1;
+  // Host autenticado a que o registo ficou associado.
+  int64 host_id = 2;
+  // source_id enviado pelo agente.
+  int64 source_id = 3;
+}
+
+message IngestStatsResponse {
+  // Uma confirmação por registo do pedido.
+  repeated StatAcknowledgement acknowledgements = 1;
+}
+
+// LogLevel é a severidade de um erro de aplicação.
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_INFO = 1;
+  LOG_LEVEL_WARN = 2;
+  LOG_LEVEL_ERROR = 3;
+  LOG_LEVEL_CRITICAL = 4;
+  LOG_LEVEL_PANIC = 5;
+}
+
+// ErrorLog é um erro registado por uma aplicação através do SDK.
+message ErrorLog {
+  // Identificador do registo no buffer do agente (> 0, único no lote). Chave de deduplicação.
+  int64 source_id = 1;
+  // Aplicação (até 200 bytes) e ambiente (até 100 bytes); obrigatórios.
+  string app_name = 2;
+  string environment = 3;
+  // Obrigatório (UNSPECIFIED é rejeitado).
+  LogLevel level = 4;
+  // Mensagem obrigatória, até 16 KiB.
+  string message = 5;
+  // Stack trace opcional, até 64 KiB.
+  optional string stack_trace = 6;
+  // Objeto JSON opcional, até 32 KiB.
+  string metadata_json = 7;
+  // Momento do erro; nunca no futuro. Ausente = momento da receção.
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message IngestErrorsRequest {
+  repeated ErrorLog errors = 1;
+}
+
+message IngestErrorsResponse {
+  // accepted = inserted + duplicates = número de registos do pedido.
+  int32 accepted = 1;
+  int32 inserted = 2;
+  int32 duplicates = 3;
+  // source_id de todos os registos aceites.
+  repeated int64 source_ids = 4;
+}
+
+// RejectionReason é o motivo, estável, por que um registo foi rejeitado. O cliente decide
+// apenas por este valor; o texto da mensagem de erro gRPC não faz parte do contrato.
+enum RejectionReason {
+  REJECTION_REASON_UNSPECIFIED = 0;
+  REJECTION_REASON_FUTURE_TIMESTAMP = 1;
+  REJECTION_REASON_FIELD_TOO_LARGE = 2;
+  REJECTION_REASON_INVALID_CPU_PERCENT = 3;
+  REJECTION_REASON_INVALID_RAM_USAGE = 4;
+  REJECTION_REASON_INVALID_DISK_USAGE = 5;
+  REJECTION_REASON_MISSING_APP_NAME = 6;
+  REJECTION_REASON_MISSING_ENVIRONMENT = 7;
+  REJECTION_REASON_INVALID_LOG_LEVEL = 8;
+  REJECTION_REASON_MISSING_MESSAGE = 9;
+  REJECTION_REASON_INVALID_METADATA = 10;
+}
+
+// RecordRejection vai nos detalhes de um erro INVALID_ARGUMENT quando um único registo do lote
+// é inválido. Os restantes registos não foram gravados e podem ser reenviados sem ele.
+message RecordRejection {
+  int64 source_id = 1;
+  RejectionReason reason = 2;
+}

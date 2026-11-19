@@ -1,0 +1,57 @@
+# Gerado a partir de monitor-platform/templates/ci.yml, com um job a mais para o contrato.
+# A versão do pipeline é fixada pela tag (@v1) do monitor-platform; para atualizar, mover a tag.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  BUF_VERSION: "1.75.0"
+  PROTOC_GEN_GO_VERSION: v1.36.12
+  PROTOC_GEN_GO_GRPC_VERSION: v1.6.2
+
+jobs:
+  go:
+    uses: ads-iscte-rg-ja/monitor-platform/.github/workflows/go-ci.yml@v1
+    with:
+      # Só há código gerado e constantes: o SonarQube Cloud não acrescenta nada aqui.
+      sonar: false
+      lint-blocking: false
+    secrets: inherit
+
+  contrato:
+    name: Contrato (buf lint, breaking, código gerado)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # o buf breaking compara com o main
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Instalar buf e plugins
+        run: |
+          go install "github.com/bufbuild/buf/cmd/buf@v${BUF_VERSION}"
+          go install "google.golang.org/protobuf/cmd/protoc-gen-go@${PROTOC_GEN_GO_VERSION}"
+          go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@${PROTOC_GEN_GO_GRPC_VERSION}"
+      - name: buf lint
+        run: buf lint
+      - name: buf breaking (contra o ramo de destino do PR)
+        # Na main já não é preciso: tudo o que lá entra passou por um PR (proteção de ramo).
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against ".git#branch=origin/${GITHUB_BASE_REF}"
+      - name: Código gerado atualizado
+        run: |
+          buf generate
+          if [ -n "$(git status --porcelain gen)" ]; then
+            git status --porcelain gen
+            echo "::error::O código em gen/ não corresponde ao .proto; correr 'buf generate' e fazer commit."
+            exit 1
+          fi

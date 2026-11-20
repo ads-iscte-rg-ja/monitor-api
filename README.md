@@ -17,8 +17,15 @@ import ingestv1 "github.com/ads-iscte-rg-ja/monitor-api/gen/go/monitor/ingest/v1
 ```
 
 ```sh
-go get github.com/ads-iscte-rg-ja/monitor-api@v1.0.0
+go get github.com/ads-iscte-rg-ja/monitor-api@v1.1.0
 ```
+
+## Versões
+
+| Versão | Alteração |
+|---|---|
+| v1.0.0 | Serviço `IngestService`: estatísticas e erros em lote, códigos de rejeição ([ADR-0003](https://github.com/ads-iscte-rg-ja/monitor-platform/blob/main/docs/adr/0003-contrato-ingestao-grpc.md)) |
+| v1.1.0 | `IngestStatsRequest.buffer` opcional: estado do *buffer* do agente ([ADR-0010](https://github.com/ads-iscte-rg-ja/monitor-platform/blob/main/docs/adr/0010-estado-do-buffer-e-health-ready.md)); aditivo |
 
 ## Alterar o contrato
 

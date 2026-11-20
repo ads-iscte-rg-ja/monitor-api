@@ -48,6 +48,28 @@ message MachineStat {
 
 message IngestStatsRequest {
   repeated MachineStat stats = 1;
+  // Estado do buffer do agente no início do ciclo de entrega (v1.1.0). Opcional: agentes antigos não o
+  // enviam. Um estado inválido é ignorado pelo servidor e nunca faz rejeitar as estatísticas.
+  optional BufferStatus buffer = 2;
+}
+
+// BufferStatus é uma fotografia do buffer local do agente (monitor-platform ADR-0010).
+message BufferStatus {
+  // Momento da fotografia; nunca no futuro. O servidor guarda só a mais recente de cada host.
+  google.protobuf.Timestamp observed_at = 1;
+  // Registos à espera de entrega (>= 0).
+  int64 pending = 2;
+  // Registos em quarentena, guardados mas que nunca serão entregues sem intervenção (>= 0).
+  int64 quarantined = 3;
+  // Idade do registo pendente mais antigo, em segundos (>= 0; 0 se não há pendentes).
+  int64 oldest_pending_age_seconds = 4;
+  // A entrega está em pausa (chave inválida ou contrato violado) até o agente ser corrigido.
+  bool delivery_paused = 5;
+  // Espaço em uso pelo buffer, em bytes (>= 0).
+  int64 size_bytes = 6;
+  // Registos descartados pelo limite do buffer desde que foi criado, por tipo (totais acumulados, >= 0).
+  // Chaves: INFO, WARN, ERROR, CRITICAL, PANIC (logs, pelo nível) e machine_stat.
+  map<string, int64> dropped_by_kind = 7;
 }
 
 // StatAcknowledgement confirma um registo gravado (ou já gravado antes).

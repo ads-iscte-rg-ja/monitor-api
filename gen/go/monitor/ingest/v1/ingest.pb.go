@@ -272,8 +272,11 @@ func (x *MachineStat) GetCollectedAt() *timestamppb.Timestamp {
 }
 
 type IngestStatsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Stats         []*MachineStat         `protobuf:"bytes,1,rep,name=stats,proto3" json:"stats,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Stats []*MachineStat         `protobuf:"bytes,1,rep,name=stats,proto3" json:"stats,omitempty"`
+	// Estado do buffer do agente no início do ciclo de entrega (v1.1.0). Opcional: agentes antigos não o
+	// enviam. Um estado inválido é ignorado pelo servidor e nunca faz rejeitar as estatísticas.
+	Buffer        *BufferStatus `protobuf:"bytes,2,opt,name=buffer,proto3,oneof" json:"buffer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -315,6 +318,114 @@ func (x *IngestStatsRequest) GetStats() []*MachineStat {
 	return nil
 }
 
+func (x *IngestStatsRequest) GetBuffer() *BufferStatus {
+	if x != nil {
+		return x.Buffer
+	}
+	return nil
+}
+
+// BufferStatus é uma fotografia do buffer local do agente (monitor-platform ADR-0010).
+type BufferStatus struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Momento da fotografia; nunca no futuro. O servidor guarda só a mais recente de cada host.
+	ObservedAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	// Registos à espera de entrega (>= 0).
+	Pending int64 `protobuf:"varint,2,opt,name=pending,proto3" json:"pending,omitempty"`
+	// Registos em quarentena, guardados mas que nunca serão entregues sem intervenção (>= 0).
+	Quarantined int64 `protobuf:"varint,3,opt,name=quarantined,proto3" json:"quarantined,omitempty"`
+	// Idade do registo pendente mais antigo, em segundos (>= 0; 0 se não há pendentes).
+	OldestPendingAgeSeconds int64 `protobuf:"varint,4,opt,name=oldest_pending_age_seconds,json=oldestPendingAgeSeconds,proto3" json:"oldest_pending_age_seconds,omitempty"`
+	// A entrega está em pausa (chave inválida ou contrato violado) até o agente ser corrigido.
+	DeliveryPaused bool `protobuf:"varint,5,opt,name=delivery_paused,json=deliveryPaused,proto3" json:"delivery_paused,omitempty"`
+	// Espaço em uso pelo buffer, em bytes (>= 0).
+	SizeBytes int64 `protobuf:"varint,6,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	// Registos descartados pelo limite do buffer desde que foi criado, por tipo (totais acumulados, >= 0).
+	// Chaves: INFO, WARN, ERROR, CRITICAL, PANIC (logs, pelo nível) e machine_stat.
+	DroppedByKind map[string]int64 `protobuf:"bytes,7,rep,name=dropped_by_kind,json=droppedByKind,proto3" json:"dropped_by_kind,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BufferStatus) Reset() {
+	*x = BufferStatus{}
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BufferStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BufferStatus) ProtoMessage() {}
+
+func (x *BufferStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BufferStatus.ProtoReflect.Descriptor instead.
+func (*BufferStatus) Descriptor() ([]byte, []int) {
+	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *BufferStatus) GetObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return nil
+}
+
+func (x *BufferStatus) GetPending() int64 {
+	if x != nil {
+		return x.Pending
+	}
+	return 0
+}
+
+func (x *BufferStatus) GetQuarantined() int64 {
+	if x != nil {
+		return x.Quarantined
+	}
+	return 0
+}
+
+func (x *BufferStatus) GetOldestPendingAgeSeconds() int64 {
+	if x != nil {
+		return x.OldestPendingAgeSeconds
+	}
+	return 0
+}
+
+func (x *BufferStatus) GetDeliveryPaused() bool {
+	if x != nil {
+		return x.DeliveryPaused
+	}
+	return false
+}
+
+func (x *BufferStatus) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *BufferStatus) GetDroppedByKind() map[string]int64 {
+	if x != nil {
+		return x.DroppedByKind
+	}
+	return nil
+}
+
 // StatAcknowledgement confirma um registo gravado (ou já gravado antes).
 type StatAcknowledgement struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -330,7 +441,7 @@ type StatAcknowledgement struct {
 
 func (x *StatAcknowledgement) Reset() {
 	*x = StatAcknowledgement{}
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[2]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -342,7 +453,7 @@ func (x *StatAcknowledgement) String() string {
 func (*StatAcknowledgement) ProtoMessage() {}
 
 func (x *StatAcknowledgement) ProtoReflect() protoreflect.Message {
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[2]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -355,7 +466,7 @@ func (x *StatAcknowledgement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatAcknowledgement.ProtoReflect.Descriptor instead.
 func (*StatAcknowledgement) Descriptor() ([]byte, []int) {
-	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{2}
+	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *StatAcknowledgement) GetId() int64 {
@@ -389,7 +500,7 @@ type IngestStatsResponse struct {
 
 func (x *IngestStatsResponse) Reset() {
 	*x = IngestStatsResponse{}
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[3]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -401,7 +512,7 @@ func (x *IngestStatsResponse) String() string {
 func (*IngestStatsResponse) ProtoMessage() {}
 
 func (x *IngestStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[3]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -414,7 +525,7 @@ func (x *IngestStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestStatsResponse.ProtoReflect.Descriptor instead.
 func (*IngestStatsResponse) Descriptor() ([]byte, []int) {
-	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{3}
+	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *IngestStatsResponse) GetAcknowledgements() []*StatAcknowledgement {
@@ -448,7 +559,7 @@ type ErrorLog struct {
 
 func (x *ErrorLog) Reset() {
 	*x = ErrorLog{}
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[4]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +571,7 @@ func (x *ErrorLog) String() string {
 func (*ErrorLog) ProtoMessage() {}
 
 func (x *ErrorLog) ProtoReflect() protoreflect.Message {
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[4]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +584,7 @@ func (x *ErrorLog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorLog.ProtoReflect.Descriptor instead.
 func (*ErrorLog) Descriptor() ([]byte, []int) {
-	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{4}
+	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ErrorLog) GetSourceId() int64 {
@@ -541,7 +652,7 @@ type IngestErrorsRequest struct {
 
 func (x *IngestErrorsRequest) Reset() {
 	*x = IngestErrorsRequest{}
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[5]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +664,7 @@ func (x *IngestErrorsRequest) String() string {
 func (*IngestErrorsRequest) ProtoMessage() {}
 
 func (x *IngestErrorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[5]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +677,7 @@ func (x *IngestErrorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestErrorsRequest.ProtoReflect.Descriptor instead.
 func (*IngestErrorsRequest) Descriptor() ([]byte, []int) {
-	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{5}
+	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *IngestErrorsRequest) GetErrors() []*ErrorLog {
@@ -590,7 +701,7 @@ type IngestErrorsResponse struct {
 
 func (x *IngestErrorsResponse) Reset() {
 	*x = IngestErrorsResponse{}
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[6]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -602,7 +713,7 @@ func (x *IngestErrorsResponse) String() string {
 func (*IngestErrorsResponse) ProtoMessage() {}
 
 func (x *IngestErrorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[6]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -615,7 +726,7 @@ func (x *IngestErrorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestErrorsResponse.ProtoReflect.Descriptor instead.
 func (*IngestErrorsResponse) Descriptor() ([]byte, []int) {
-	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{6}
+	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *IngestErrorsResponse) GetAccepted() int32 {
@@ -658,7 +769,7 @@ type RecordRejection struct {
 
 func (x *RecordRejection) Reset() {
 	*x = RecordRejection{}
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[7]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -670,7 +781,7 @@ func (x *RecordRejection) String() string {
 func (*RecordRejection) ProtoMessage() {}
 
 func (x *RecordRejection) ProtoReflect() protoreflect.Message {
-	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[7]
+	mi := &file_monitor_ingest_v1_ingest_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -683,7 +794,7 @@ func (x *RecordRejection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordRejection.ProtoReflect.Descriptor instead.
 func (*RecordRejection) Descriptor() ([]byte, []int) {
-	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{7}
+	return file_monitor_ingest_v1_ingest_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RecordRejection) GetSourceId() int64 {
@@ -715,9 +826,24 @@ const file_monitor_ingest_v1_ingest_proto_rawDesc = "" +
 	"\fdisk_used_gb\x18\x05 \x01(\x01R\n" +
 	"diskUsedGb\x12\"\n" +
 	"\rdisk_total_gb\x18\x06 \x01(\x01R\vdiskTotalGb\x12=\n" +
-	"\fcollected_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vcollectedAt\"J\n" +
+	"\fcollected_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vcollectedAt\"\x93\x01\n" +
 	"\x12IngestStatsRequest\x124\n" +
-	"\x05stats\x18\x01 \x03(\v2\x1e.monitor.ingest.v1.MachineStatR\x05stats\"[\n" +
+	"\x05stats\x18\x01 \x03(\v2\x1e.monitor.ingest.v1.MachineStatR\x05stats\x12<\n" +
+	"\x06buffer\x18\x02 \x01(\v2\x1f.monitor.ingest.v1.BufferStatusH\x00R\x06buffer\x88\x01\x01B\t\n" +
+	"\a_buffer\"\xaa\x03\n" +
+	"\fBufferStatus\x12;\n" +
+	"\vobserved_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"observedAt\x12\x18\n" +
+	"\apending\x18\x02 \x01(\x03R\apending\x12 \n" +
+	"\vquarantined\x18\x03 \x01(\x03R\vquarantined\x12;\n" +
+	"\x1aoldest_pending_age_seconds\x18\x04 \x01(\x03R\x17oldestPendingAgeSeconds\x12'\n" +
+	"\x0fdelivery_paused\x18\x05 \x01(\bR\x0edeliveryPaused\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x06 \x01(\x03R\tsizeBytes\x12Z\n" +
+	"\x0fdropped_by_kind\x18\a \x03(\v22.monitor.ingest.v1.BufferStatus.DroppedByKindEntryR\rdroppedByKind\x1a@\n" +
+	"\x12DroppedByKindEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"[\n" +
 	"\x13StatAcknowledgement\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
 	"\ahost_id\x18\x02 \x01(\x03R\x06hostId\x12\x1b\n" +
@@ -786,37 +912,42 @@ func file_monitor_ingest_v1_ingest_proto_rawDescGZIP() []byte {
 }
 
 var file_monitor_ingest_v1_ingest_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_monitor_ingest_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_monitor_ingest_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_monitor_ingest_v1_ingest_proto_goTypes = []any{
 	(LogLevel)(0),                 // 0: monitor.ingest.v1.LogLevel
 	(RejectionReason)(0),          // 1: monitor.ingest.v1.RejectionReason
 	(*MachineStat)(nil),           // 2: monitor.ingest.v1.MachineStat
 	(*IngestStatsRequest)(nil),    // 3: monitor.ingest.v1.IngestStatsRequest
-	(*StatAcknowledgement)(nil),   // 4: monitor.ingest.v1.StatAcknowledgement
-	(*IngestStatsResponse)(nil),   // 5: monitor.ingest.v1.IngestStatsResponse
-	(*ErrorLog)(nil),              // 6: monitor.ingest.v1.ErrorLog
-	(*IngestErrorsRequest)(nil),   // 7: monitor.ingest.v1.IngestErrorsRequest
-	(*IngestErrorsResponse)(nil),  // 8: monitor.ingest.v1.IngestErrorsResponse
-	(*RecordRejection)(nil),       // 9: monitor.ingest.v1.RecordRejection
-	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(*BufferStatus)(nil),          // 4: monitor.ingest.v1.BufferStatus
+	(*StatAcknowledgement)(nil),   // 5: monitor.ingest.v1.StatAcknowledgement
+	(*IngestStatsResponse)(nil),   // 6: monitor.ingest.v1.IngestStatsResponse
+	(*ErrorLog)(nil),              // 7: monitor.ingest.v1.ErrorLog
+	(*IngestErrorsRequest)(nil),   // 8: monitor.ingest.v1.IngestErrorsRequest
+	(*IngestErrorsResponse)(nil),  // 9: monitor.ingest.v1.IngestErrorsResponse
+	(*RecordRejection)(nil),       // 10: monitor.ingest.v1.RecordRejection
+	nil,                           // 11: monitor.ingest.v1.BufferStatus.DroppedByKindEntry
+	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
 }
 var file_monitor_ingest_v1_ingest_proto_depIdxs = []int32{
-	10, // 0: monitor.ingest.v1.MachineStat.collected_at:type_name -> google.protobuf.Timestamp
+	12, // 0: monitor.ingest.v1.MachineStat.collected_at:type_name -> google.protobuf.Timestamp
 	2,  // 1: monitor.ingest.v1.IngestStatsRequest.stats:type_name -> monitor.ingest.v1.MachineStat
-	4,  // 2: monitor.ingest.v1.IngestStatsResponse.acknowledgements:type_name -> monitor.ingest.v1.StatAcknowledgement
-	0,  // 3: monitor.ingest.v1.ErrorLog.level:type_name -> monitor.ingest.v1.LogLevel
-	10, // 4: monitor.ingest.v1.ErrorLog.created_at:type_name -> google.protobuf.Timestamp
-	6,  // 5: monitor.ingest.v1.IngestErrorsRequest.errors:type_name -> monitor.ingest.v1.ErrorLog
-	1,  // 6: monitor.ingest.v1.RecordRejection.reason:type_name -> monitor.ingest.v1.RejectionReason
-	3,  // 7: monitor.ingest.v1.IngestService.IngestStats:input_type -> monitor.ingest.v1.IngestStatsRequest
-	7,  // 8: monitor.ingest.v1.IngestService.IngestErrors:input_type -> monitor.ingest.v1.IngestErrorsRequest
-	5,  // 9: monitor.ingest.v1.IngestService.IngestStats:output_type -> monitor.ingest.v1.IngestStatsResponse
-	8,  // 10: monitor.ingest.v1.IngestService.IngestErrors:output_type -> monitor.ingest.v1.IngestErrorsResponse
-	9,  // [9:11] is the sub-list for method output_type
-	7,  // [7:9] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	4,  // 2: monitor.ingest.v1.IngestStatsRequest.buffer:type_name -> monitor.ingest.v1.BufferStatus
+	12, // 3: monitor.ingest.v1.BufferStatus.observed_at:type_name -> google.protobuf.Timestamp
+	11, // 4: monitor.ingest.v1.BufferStatus.dropped_by_kind:type_name -> monitor.ingest.v1.BufferStatus.DroppedByKindEntry
+	5,  // 5: monitor.ingest.v1.IngestStatsResponse.acknowledgements:type_name -> monitor.ingest.v1.StatAcknowledgement
+	0,  // 6: monitor.ingest.v1.ErrorLog.level:type_name -> monitor.ingest.v1.LogLevel
+	12, // 7: monitor.ingest.v1.ErrorLog.created_at:type_name -> google.protobuf.Timestamp
+	7,  // 8: monitor.ingest.v1.IngestErrorsRequest.errors:type_name -> monitor.ingest.v1.ErrorLog
+	1,  // 9: monitor.ingest.v1.RecordRejection.reason:type_name -> monitor.ingest.v1.RejectionReason
+	3,  // 10: monitor.ingest.v1.IngestService.IngestStats:input_type -> monitor.ingest.v1.IngestStatsRequest
+	8,  // 11: monitor.ingest.v1.IngestService.IngestErrors:input_type -> monitor.ingest.v1.IngestErrorsRequest
+	6,  // 12: monitor.ingest.v1.IngestService.IngestStats:output_type -> monitor.ingest.v1.IngestStatsResponse
+	9,  // 13: monitor.ingest.v1.IngestService.IngestErrors:output_type -> monitor.ingest.v1.IngestErrorsResponse
+	12, // [12:14] is the sub-list for method output_type
+	10, // [10:12] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_monitor_ingest_v1_ingest_proto_init() }
@@ -824,14 +955,15 @@ func file_monitor_ingest_v1_ingest_proto_init() {
 	if File_monitor_ingest_v1_ingest_proto != nil {
 		return
 	}
-	file_monitor_ingest_v1_ingest_proto_msgTypes[4].OneofWrappers = []any{}
+	file_monitor_ingest_v1_ingest_proto_msgTypes[1].OneofWrappers = []any{}
+	file_monitor_ingest_v1_ingest_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_monitor_ingest_v1_ingest_proto_rawDesc), len(file_monitor_ingest_v1_ingest_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
